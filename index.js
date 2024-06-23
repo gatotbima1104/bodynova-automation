@@ -116,11 +116,118 @@ async function loginPage(page, email, password, browser, loginUrl) {
   }
 }
 
+// Function spanStrongText
+async function spanStrongText(item){
+  const spanText = await item.evaluate((element) => {
+    const span = element.querySelector(
+      "div.pull-left.selection-text > strong"
+    );
+    return span ? span.textContent.trim() : "";
+  });
+
+  return spanText
+}
+
+// Function addToChart not found go to help-code
+async function addToChartNotFoundToHelpCode(page, codeItem, amountItem, itemsVarian, helpItem) {
+  try {
+    // Define variable
+    let foundMatch = false;
+    let isSoldOut = false
+    const codeItemToLower = codeItem.toLowerCase()
+
+    for (let item of itemsVarian) {
+      const spanText = await spanStrongText(item)
+
+      // Check if span text matches codeItem
+      if (spanText === codeItem || spanText === codeItemToLower) {
+        // Find and modify the input field within the same item
+        const inputSelector = 'input[type="numeric"]';
+        const input = await item.$(inputSelector);
+        if (input) {
+          await input.click({ clickCount: 3 }); // Select all text in the input
+          await input.press("Backspace"); // Clear existing value
+          await setTimeout(500)
+          await input.type(amountItem, { delay: 200 }); // Type new value
+          // Click the "add to chart" button
+          const chartSelector =
+            "button.btn.btn-default.btn-prima.btn-basket.ladda-button.btn-outline-success.pull-right";
+          await page.waitForSelector(chartSelector);
+          await page.click(chartSelector);
+  
+          // Optionally, wait for some time for the operation to complete
+          consoleLog(`ADDED TO CHART CODE:${spanText}, AMOUNT ${amountItem}`);
+          await setTimeout(3000); // Adjust as necessary
+  
+          foundMatch = true; // Set flag to true since a match was found
+          break; // Exit the loop since a match was found
+        }else{
+          consoleLog(`ITEM SOLD OUT ....`)
+          isSoldOut = true;
+          break;
+        }
+
+      }
+    }
+
+    // No code match
+    if (!foundMatch && !isSoldOut) {
+      consoleLog(`NO ITEM MATCH CODE: ${codeItem}`);
+
+      await setTimeout(1000);
+      consoleLog( `TRYING SEARCH WITH HELP-CODES ...` );
+
+      await page.goto(
+        `https://sales.bodynova.com/index.php?stoken=DAAF82D7&lang=1&cl=search&searchparam=${helpItem}`,
+        { waitUntil: "domcontentloaded" }
+      );
+
+      await setTimeout(1000);
+
+      const existProductHelp = await productsSearchResult(page);
+      if (existProductHelp) {
+        // pick the product
+        consoleLog(`FOUND WITH HELP-CODES:${helpItem}`);
+        await setTimeout(1000);
+
+        // Pick the product
+        // Click the dropdown menu
+        const showAllProducts = "div.input-line > button";
+        await page.waitForSelector(showAllProducts);
+        await page.click(showAllProducts);
+        await setTimeout(3500);
+
+        const itemsVarianSelector =
+          "td.ebenetitel.d-none.d-xl-table-cell";
+        await page.waitForSelector(itemsVarianSelector);
+        const itemsVarian = await page.$$(itemsVarianSelector);
+
+        // Implement add to chart function
+        await addToChart(page, codeItem, amountItem, itemsVarian);
+      } else {
+        // Condition if code-C is filled
+        await setTimeout(1000);
+        consoleLog(`NOT-FOUND WITH HELP-CODES:\x1b[1m${helpItem}\x1b[0m`);
+        index++;
+        // continue;
+      }
+    }
+    await setTimeout(1000);
+
+    return true;
+  } catch (error) {
+    console.log(error);
+
+    return false;
+  }
+}
+
 // Function addToChart
 async function addToChart(page, codeItem, amountItem, itemsVarian) {
   try {
     // Define match codeItem
     let foundMatch = false;
+    const codeItemToLower = codeItem.toLowerCase()
     for (let item of itemsVarian) {
       // Evaluate the span text content within the item
       const spanText = await item.evaluate((element) => {
@@ -131,28 +238,30 @@ async function addToChart(page, codeItem, amountItem, itemsVarian) {
       });
 
       // Check if span text matches codeItem
-      if (spanText === codeItem) {
+      if (spanText === codeItem || spanText === codeItemToLower) {
         // Find and modify the input field within the same item
         const inputSelector = 'input[type="numeric"]';
         const input = await item.$(inputSelector);
         if (input) {
           await input.click({ clickCount: 3 }); // Select all text in the input
           await input.press("Backspace"); // Clear existing value
+          await setTimeout(500)
           await input.type(amountItem, { delay: 200 }); // Type new value
+          const chartSelector = "button.btn.btn-default.btn-prima.btn-basket.ladda-button.btn-outline-success.pull-right";
+          await page.waitForSelector(chartSelector);
+          await page.click(chartSelector);
+  
+          // Optionally, wait for some time for the operation to complete
+          consoleLog(`ADDED TO CHART CODE:${spanText}, AMOUNT ${amountItem}`);
+          await setTimeout(3000); // Adjust as necessary
+  
+          foundMatch = true; // Set flag to true since a match was found
+          break; // Exit the loop since a match was found
+        }else{
+          consoleLog(`ITEM SOLD OUT ....`)
+          continue;
         }
 
-        // Click the "add to chart" button
-        const chartSelector =
-          "button.btn.btn-default.btn-prima.btn-basket.ladda-button.btn-outline-success.pull-right";
-        await page.waitForSelector(chartSelector);
-        await page.click(chartSelector);
-
-        // Optionally, wait for some time for the operation to complete
-        consoleLog(`ADDED TO CHART CODE:${spanText}, AMOUNT ${amountItem}`);
-        await setTimeout(3000); // Adjust as necessary
-
-        foundMatch = true; // Set flag to true since a match was found
-        break; // Exit the loop since a match was found
       }
     }
 
@@ -193,14 +302,6 @@ async function findSpan(page) {
   });
 
   return spanItems;
-}
-
-// Click dropdown
-async function clickDropDown(page) {
-  const showAllProducts = "div.input-line > button";
-  await page.waitForSelector(showAllProducts);
-  await page.click(showAllProducts);
-  await setTimeout(3500);
 }
 
 (async () => {
@@ -245,7 +346,6 @@ async function clickDropDown(page) {
         const codeItem = codes[item];
         const amountItem = amounts[item];
         const helpItem = helps[item];
-        const codeItemToLower = codeItem.toLowerCase()
 
         console.log(`================================= PROCESSING ITEMS ${index}`);
 
@@ -274,57 +374,18 @@ async function clickDropDown(page) {
             await setTimeout(1000);
 
             // Click the dropdown menu
-            // const showAllProducts = "div.input-line > button";
-            // await page.waitForSelector(showAllProducts);
-            // await page.click(showAllProducts);
-            // await setTimeout(3500);
+            const showAllProducts = "div.input-line > button";
+            await page.waitForSelector(showAllProducts);
+            await page.click(showAllProducts);
+            await setTimeout(3500);
 
-            // const itemsVarianSelector =
-            //   "td.ebenetitel.d-none.d-xl-table-cell";
-            // await page.waitForSelector(itemsVarianSelector);
-            // const itemsVarian = await page.$$(itemsVarianSelector);
+            const itemsVarianSelector =
+              "td.ebenetitel.d-none.d-xl-table-cell";
+            await page.waitForSelector(itemsVarianSelector);
+            const itemsVarian = await page.$$(itemsVarianSelector);
 
-            const spansFound = await findSpan(page)
-            let foundMatch = false;
-            for (let span of spansFound) {
-              // console.log(span)
-              if (span === codeItem) {          // Cek span in products ---before clicking the view btn
-                console.log(`found match w/ code ${codeItem}`);
-                // Click dropdown
-                await clickDropDown(page)
-                // Click Varian menu
-                const itemsVarianSelector = "td.ebenetitel.d-none.d-xl-table-cell";
-                await page.waitForSelector(itemsVarianSelector);
-                const itemsVarian = await page.$$(itemsVarianSelector);
-                // Implement add to chart function
-                await addToChart(page, codeItem, amountItem, itemsVarian);
-                foundMatch = true;
-                break; //
-              }
-            }
-            if (!foundMatch) {
-              consoleLog(`No match found for ${codeItem}.`);
-              consoleLog(`TRYING SEARCH WITH HELP-CODES ...`);
-              await page.goto(
-                `https://sales.bodynova.com/index.php?stoken=DAAF82D7&lang=1&cl=search&searchparam=${helpItem}`,
-                { waitUntil: "domcontentloaded" }
-              );
-              await setTimeout(1000);
-
-              const existProductHelp = await productsSearchResult(page);
-              if (existProductHelp) {
-                consoleLog(`FOUND WITH HELP-CODES:${helpItem}`);
-                await setTimeout(1000);
-                // Click dropdown
-                await clickDropDown(page)
-                // Click varian menu
-                const itemsVarianSelector = "td.ebenetitel.d-none.d-xl-table-cell";
-                await page.waitForSelector(itemsVarianSelector);
-                const itemsVarian = await page.$$(itemsVarianSelector);
-                // Implement add to chart function
-                await addToChart(page, codeItem, amountItem, itemsVarian);
-              }
-            }
+            await addToChartNotFoundToHelpCode(page, codeItem, amountItem, itemsVarian, helpItem);
+            
           } else {        // Condition Help-Code Works
             await setTimeout(1000);
             consoleLog(
@@ -372,6 +433,8 @@ async function clickDropDown(page) {
         index++;
       }
     }
+
+    consoleLog(`ALL PRODUCT LOADED SUCCESSFULLY `)
 
     await browser.close();
   } catch (error) {
