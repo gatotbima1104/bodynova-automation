@@ -61,10 +61,10 @@ function consoleLog(values) {
 // Function loginWebsite
 async function loginPage(page, email, password, browser, loginUrl) {
   try {
-    const existCookies = fs.existsSync("./cookies.json");
-    if (!existCookies) {
-      consoleLog("COOKIES NOT FOUND, LOGGING IN .....");
-      // consoleLog("LOGGING IN ....");
+    // const existCookies = fs.existsSync("./cookies.json");
+    // if (!existCookies) {
+    //   consoleLog("COOKIES NOT FOUND, LOGGING IN .....");
+      consoleLog("LOGGING IN ....");
       await page.goto(loginUrl, {
         waitUntil: "domcontentloaded",
         timeout: 60000, // reduce waiting login
@@ -96,21 +96,22 @@ async function loginPage(page, email, password, browser, loginUrl) {
         } else {
           const cookies = await page.cookies();
           fs.writeFileSync("./cookies.json", JSON.stringify(cookies, null, 2));
-          consoleLog("LOGIN SUCESSFULLY, COOKIES SAVED ...");
+          // consoleLog("LOGIN SUCESSFULLY, COOKIES SAVED ...");
+          consoleLog("LOGIN SUCESSFULLY ...");
 
           return true;
         }
       } catch (error) {
         console.error("An error occurred:", error);
       }
-    } else {
-      const cookieString = fs.readFileSync("./cookies.json");
-      const cookies = await JSON.parse(cookieString);
-      await page.setCookie(...cookies);
-      consoleLog("COOKIES FOUND AND SETTED SUCCESSFULLY");
+    // } else {
+    //   const cookieString = fs.readFileSync("./cookies.json");
+    //   const cookies = await JSON.parse(cookieString);
+    //   await page.setCookie(...cookies);
+    //   consoleLog("COOKIES FOUND AND SETTED SUCCESSFULLY");
 
-      return true;
-    }
+    //   return true;
+    // }
   } catch (error) {
     console.log(`login failed : `, error);
   }
@@ -127,13 +128,7 @@ async function spanStrongText(item) {
 }
 
 // Function addToChart not found go to help-code
-async function addToChartNotFoundToHelpCode(
-  page,
-  codeItem,
-  amountItem,
-  itemsVarian,
-  helpItem
-) {
+async function addToChartNotFoundToHelpCode( page, codeItem, amountItem, itemsVarian, helpItem, codePattern) {
   try {
     // Define variable
     let foundMatch = false;
@@ -142,29 +137,14 @@ async function addToChartNotFoundToHelpCode(
 
     for (let item of itemsVarian) {
       const spanText = await spanStrongText(item);
-
-      // Check if span text matches codeItem
       if (spanText === codeItem || spanText === codeItemToLower) {
-        // Find and modify the input field within the same item
+        console.log(`=== ITEM FOUND IN VARIAN ITEMS`)
         const inputSelector = 'input[type="numeric"]';
         const input = await item.$(inputSelector);
         if (input) {
-          await input.click({ clickCount: 3 }); // Select all text in the input
-          await input.press("Backspace"); // Clear existing value
-          await setTimeout(500);
-          await input.type(amountItem, { delay: 200 }); // Type new value
-          // Click the "add to chart" button
-          const chartSelector =
-            "button.btn.btn-default.btn-prima.btn-basket.ladda-button.btn-outline-success.pull-right";
-          await page.waitForSelector(chartSelector);
-          await page.click(chartSelector);
-
-          // Optionally, wait for some time for the operation to complete
-          console.log(`ADDED TO CHART CODE:\x1b[1m${spanText}\x1b[0m, AMOUNT ${amountItem}`);
-          await setTimeout(3000); // Adjust as necessary
-
-          foundMatch = true; // Set flag to true since a match was found
-          break; // Exit the loop since a match was found
+          await inputToChart(page, amountItem, input, spanText)
+          foundMatch = true; 
+          break; 
         } else {
           console.log(`ITEM SOLD OUT ....`);
           isSoldOut = true;
@@ -175,7 +155,7 @@ async function addToChartNotFoundToHelpCode(
 
     // No code match
     if (!foundMatch && !isSoldOut) {
-      console.log(`NO ITEM MATCH CODE: ${codeItem}`);
+      console.log(`NO VARIAN MATCH CODE: \x1b[1m${codeItem}\x1b[0m`);
 
       await setTimeout(1000);
       console.log(`TRYING SEARCH WITH HELP-CODES ...`);
@@ -187,31 +167,32 @@ async function addToChartNotFoundToHelpCode(
 
       await setTimeout(1000);
 
-      const existProductHelp = await productsSearchResult(page);
-      if (existProductHelp) {
-        // pick the product
-        console.log(`FOUND WITH HELP-CODES:${helpItem}`);
-        await setTimeout(1000);
+      // const existProductHelp = await productsSearchResult(page);
+      const existProductHelp = await product(page);
 
-        // Pick the product
-        // Click the dropdown menu
-        const showAllProducts = "div.input-line > button";
-        await page.waitForSelector(showAllProducts);
-        await page.click(showAllProducts);
-        await setTimeout(3500);
-
-        const itemsVarianSelector = "td.ebenetitel.d-none.d-xl-table-cell";
-        await page.waitForSelector(itemsVarianSelector);
-        const itemsVarian = await page.$$(itemsVarianSelector);
-
-        // Implement add to chart function
-        await addToChart(page, codeItem, amountItem, itemsVarian);
-      } else {
+      if (existProductHelp.length === 0) {
         // Condition if code-C is filled
         await setTimeout(1000);
         console.log(`NOT-FOUND WITH HELP-CODES:\x1b[1m${helpItem}\x1b[0m`);
         index++;
         // continue;
+      } else {
+        let foundMatch = false;
+        for(let item of existProductHelp){
+          if(item.code.includes(codePattern)){
+            console.log(`FOUND WITH HELP-CODES:\x1b[1m${helpItem}\x1b[0m`);
+            await setTimeout(1000);
+            await dropdownBtn(page, item.id)
+            const itemsVarian = await itemVarianDropdown(page)
+            await addToChart(page, codeItem, amountItem, itemsVarian);
+            foundMatch = true
+          }
+        }
+        if (!foundMatch) {
+          console.log(`NO ITEMS FOUND FOR HELP-CODES:\x1b[1m${helpItem}\x1b[0m`);
+          index++;
+          // continue;
+        }
       }
     }
     await setTimeout(1000);
@@ -224,42 +205,39 @@ async function addToChartNotFoundToHelpCode(
   }
 }
 
+// Function input addToChart
+async function inputToChart(page, amountItem, input, spanText){
+
+  await input.click({ clickCount: 3 }); 
+  await input.press("Backspace"); 
+  await setTimeout(500);
+  await input.type(amountItem, { delay: 200 }); 
+
+  const chartSelector = "button.btn.btn-default.btn-prima.btn-basket.ladda-button.btn-outline-success.pull-right";
+  await page.waitForSelector(chartSelector);
+  await page.click(chartSelector);
+
+  console.log(`ADDED TO CHART CODE:\x1b[1m${spanText}\x1b[0m, AMOUNT \x1b[1m${amountItem}\x1b[0m`);
+  await setTimeout(3000); 
+}
+
 // Function addToChart
 async function addToChart(page, codeItem, amountItem, itemsVarian) {
   try {
-    // Define match codeItem
+
     let foundMatch = false;
     const codeItemToLower = codeItem.toLowerCase();
-    for (let item of itemsVarian) {
-      // Evaluate the span text content within the item
-      const spanText = await item.evaluate((element) => {
-        const span = element.querySelector(
-          "div.pull-left.selection-text > strong"
-        );
-        return span ? span.textContent.trim() : "";
-      });
 
-      // Check if span text matches codeItem
+    for (let item of itemsVarian) {
+      const spanText = await spanStrongText(item)
       if (spanText === codeItem || spanText === codeItemToLower) {
-        // Find and modify the input field within the same item
+        console.log(`=== ITEM FOUND IN VARIAN ITEMS`)
         const inputSelector = 'input[type="numeric"]';
         const input = await item.$(inputSelector);
         if (input) {
-          await input.click({ clickCount: 3 }); // Select all text in the input
-          await input.press("Backspace"); // Clear existing value
-          await setTimeout(500);
-          await input.type(amountItem, { delay: 200 }); // Type new value
-          const chartSelector =
-            "button.btn.btn-default.btn-prima.btn-basket.ladda-button.btn-outline-success.pull-right";
-          await page.waitForSelector(chartSelector);
-          await page.click(chartSelector);
-
-          // Optionally, wait for some time for the operation to complete
-          console.log(`ADDED TO CHART CODE:\x1b[1m${spanText}\x1b[0m, AMOUNT ${amountItem}`);
-          await setTimeout(3000); // Adjust as necessary
-
-          foundMatch = true; // Set flag to true since a match was found
-          break; // Exit the loop since a match was found
+          await inputToChart(page, amountItem, input, spanText)
+          foundMatch = true; 
+          break; 
         } else {
           console.log(`ITEM SOLD OUT ....`);
           break;
@@ -269,42 +247,27 @@ async function addToChart(page, codeItem, amountItem, itemsVarian) {
 
     // No code match
     if (!foundMatch) {
-      console.log(`NO ITEM MATCH CODE: ${codeItem}`);
+      console.log(`NO VARIAN MATCH CODE: \x1b[1m${codeItem}\x1b[0m`);
     }
-
     await setTimeout(1000);
-
     return true;
   } catch (error) {
     console.log(error);
-
     return false;
   }
 }
 
 // Function looking search products
-async function productsSearchResult(page) {
-  const product = await page.evaluate(() => {
-    const items = Array.from(
-      document.querySelectorAll("div.tabellenspalte.d-xl-none")
-    );
-    return items.length > 0; // Return true if items are found
-  });
+// async function productsSearchResult(page) {
+//   const product = await page.evaluate(() => {
+//     const items = Array.from(
+//       document.querySelectorAll("div.tabellenspalte.d-xl-none")
+//     );
+//     return items.length > 0; // Return true if items are found
+//   });
 
-  return product;
-}
-
-// Check items span
-async function findSpan(page) {
-  const spanItems = await page.evaluate(() => {
-    const spans = document.querySelectorAll("div.artnr.pull-left");
-    return Array.from(spans).map((el) =>
-      el.textContent.trim().replace("art.: ", "")
-    );
-  });
-
-  return spanItems;
-}
+//   return product;
+// }
 
 // Extract all element products
 async function product(page) {
@@ -361,6 +324,15 @@ async function dropdownBtn(page, productId) {
   await setTimeout(3500);
 }
 
+// ItemVarian inside dropdownBtn
+async function itemVarianDropdown(page){
+  const itemsVarianSelector = "td.ebenetitel.d-none.d-xl-table-cell";
+  await page.waitForSelector(itemsVarianSelector);
+  const itemsVarian = await page.$$(itemsVarianSelector);
+
+  return itemsVarian
+}
+
 (async () => {
   try {
     // Auth to google apis
@@ -380,7 +352,7 @@ async function dropdownBtn(page, productId) {
 
     // Setting page for browser
     const browser = await puppeteer.launch({
-      headless: 'new',
+      headless: "new",
       args: ["--no-sandbox", "--enable-blink-features=HTMLImports"],
     });
     const page = await browser.newPage();
@@ -393,8 +365,9 @@ async function dropdownBtn(page, productId) {
       browser,
       loginUrl
     );
-
     await setTimeout(1000);
+
+    // Processing product
     if (loginSuccessfully) {
       let index = 1;
       for (let item = 0; item < codes.length; item++) {
@@ -406,7 +379,7 @@ async function dropdownBtn(page, productId) {
         const codePattern = `${codeItemHelp}x`;
 
         console.log(
-          `================================= PROCESSING ITEMS ${index}`
+          `================================= PROCESSING ITEMS \x1b[1m${index}\x1b[0m`
         );
 
         try {
@@ -420,37 +393,28 @@ async function dropdownBtn(page, productId) {
           const foundProducts = await product(page);
           await setTimeout(1000);
 
-          if (foundProducts.length === 0) {
-            // console.log("No products found.");
-
+          if (foundProducts.length === 0) {       // NOT FOUND ITEMS > GO HELP-CODES
             console.log( `NOT-FOUND CODE:\x1b[1m${codeItem}\x1b[0m, TRYING SEARCH WITH HELP-CODES ...` );
             await page.goto( `https://sales.bodynova.com/index.php?stoken=DAAF82D7&lang=1&cl=search&searchparam=${helpItem}`, { waitUntil: "domcontentloaded" });
             await setTimeout(1000);
 
             const existProductHelpsCode = await product(page);
-            if (existProductHelpsCode === 0) {
+            if (existProductHelpsCode === 0) {      // NOT FOUND ITEMS WITH HELP-CODE
               await setTimeout(1000);
               console.log(`NOT-FOUND WITH HELP-CODES:\x1b[1m${helpItem}\x1b[0m`);
               index++;
               continue;
             }
-
-            for (let item of existProductHelpsCode) {
+            for (let item of existProductHelpsCode) { // FOUND ITEMS > LOOP ITEMS > ADD TO CHART
               if (item.code.includes(codePattern)) {
-                console.log(`FOUND WITH HELP-CODES:${helpItem}`);
+                console.log(`FOUND WITH HELP-CODES:\x1b[1m${helpItem}\x1b[0m`);
                 await setTimeout(1000);
-
                 await dropdownBtn(page, item.id);
-
-                const itemsVarianSelector = "td.ebenetitel.d-none.d-xl-table-cell";
-                await page.waitForSelector(itemsVarianSelector);
-                const itemsVarian = await page.$$(itemsVarianSelector);
-
+                const itemsVarian = await itemVarianDropdown(page)
                 await addToChart(page, codeItem, amountItem, itemsVarian);
               }
             }
-          } else {
-            // Main product
+          } else {                                // FOUND ITEMS 
             let foundProductPattern = false;
             for (let product of foundProducts) {
               if (product.code.includes(codePattern)) {
@@ -458,18 +422,12 @@ async function dropdownBtn(page, productId) {
                 await setTimeout(1000);
                 try {
                   // Click the dropdown menu;
-                  const dropdownSelector = `#${product.id} > td.ebenetitel > form > div > div.col-sm-5 > div > button`;
-                  await page.waitForSelector(dropdownSelector);
-                  await page.click(dropdownSelector);
-                  await setTimeout(3500);
+                  await dropdownBtn(page, product.id)
 
-                  const itemsVarianSelector = "td.ebenetitel.d-none.d-xl-table-cell";
-                  await page.waitForSelector(itemsVarianSelector);
-                  const itemsVarian = await page.$$(itemsVarianSelector);
+                  const itemsVarian = await itemVarianDropdown(page)
 
-                  // Continue with your code logic here
                   // await addToChart(page, codeItem, amountItem, itemsVarian);
-                  await addToChartNotFoundToHelpCode(page, codeItem, amountItem, itemsVarian, helpItem)
+                  await addToChartNotFoundToHelpCode(page, codeItem, amountItem, itemsVarian, helpItem, codePattern)
                   foundProductPattern = true;
                   break;
                 } catch (error) {
@@ -480,55 +438,15 @@ async function dropdownBtn(page, productId) {
                 }
               }
             }
-
-            if (!foundProductPattern) {
-              console.log("2");
-              console.log(
-                `NOT-FOUND CODE:\x1b[1m${codeItem}\x1b[0m, TRYING SEARCH WITH HELP-CODES ...`
-              );
-              await page.goto(
-                `https://sales.bodynova.com/index.php?stoken=DAAF82D7&lang=1&cl=search&searchparam=${helpItem}`,
-                { waitUntil: "domcontentloaded" }
-              );
-              await setTimeout(1000);
-
-              const existProductHelps = await product(page);
-              if (existProductHelps.length === 0) {
-                console.log(
-                  `NOT-FOUND WITH HELP-CODES:\x1b[1m${helpItem}\x1b[0m`
-                );
-                index++;
-                continue;
-              }
-
-              let foundItemWithHelp = false;
-              for (let item of existProductHelps) {
-                if (item.code.includes(codePattern)) {
-                  console.log(`FOUND WITH HELP-CODES:${helpItem}`);
-                  await setTimeout(1000);
-
-                  await dropdownBtn(page, item.id);
-
-                  const itemsVarianSelector =
-                    "td.ebenetitel.d-none.d-xl-table-cell";
-                  await page.waitForSelector(itemsVarianSelector);
-                  const itemsVarian = await page.$$(itemsVarianSelector);
-
-                  await addToChartNotFoundToHelpCode(page, codeItem, amountItem, itemsVarian, helpItem);
-                  foundItemWithHelp = true;
-                }
-              }
-            }
           }
         } catch (error) {
           console.log(error);
         }
-
         index++;
       }
-    }
 
-    consoleLog(`ALL PRODUCT LOADED SUCCESSFULLY `);
+      consoleLog(`ALL PRODUCT LOADED SUCCESSFULLY `);
+    }
 
     await browser.close();
   } catch (error) {
