@@ -257,18 +257,6 @@ async function addToChart(page, codeItem, amountItem, itemsVarian) {
   }
 }
 
-// Function looking search products
-// async function productsSearchResult(page) {
-//   const product = await page.evaluate(() => {
-//     const items = Array.from(
-//       document.querySelectorAll("div.tabellenspalte.d-xl-none")
-//     );
-//     return items.length > 0; // Return true if items are found
-//   });
-
-//   return product;
-// }
-
 // Extract all element products
 async function product(page) {
   const productsWithDropdown = await page.evaluate(() => {
@@ -319,9 +307,13 @@ async function product(page) {
 // DropdownBtn
 async function dropdownBtn(page, productId) {
   const dropdownSelector = `#${productId} > td.ebenetitel > form > div > div.col-sm-5 > div > button`;
-  await page.waitForSelector(dropdownSelector);
-  await page.click(dropdownSelector);
-  await setTimeout(3500);
+  try {
+      await page.waitForSelector(dropdownSelector, { visible: true });
+      await page.click(dropdownSelector);
+      await setTimeout(3500); // Adjust timing as necessary
+  } catch (error) {
+      console.error(`Error clicking dropdown button for product ${productId}:`, error);
+  }
 }
 
 // ItemVarian inside dropdownBtn
@@ -414,7 +406,8 @@ async function itemVarianDropdown(page){
                 await addToChart(page, codeItem, amountItem, itemsVarian);
               }
             }
-          } else {                                // FOUND ITEMS 
+          } else {                       
+            // FOUND ITEMS 
             let foundProductPattern = false;
             for (let product of foundProducts) {
               if (product.code.includes(codePattern)) {
@@ -436,6 +429,25 @@ async function itemVarianDropdown(page){
                     error
                   );
                 }
+              }
+            }
+            if(!foundProductPattern){
+              console.log( `NOT-FOUND CODE:\x1b[1m${codeItem}\x1b[0m, TRYING SEARCH WITH HELP-CODES ...` );
+              await page.goto( `https://sales.bodynova.com/index.php?stoken=DAAF82D7&lang=1&cl=search&searchparam=${helpItem}`, { waitUntil: "domcontentloaded" });
+              await setTimeout(1000);
+  
+              const existProductHelpsCode = await product(page);
+              if (existProductHelpsCode === 0) {      // NOT FOUND ITEMS WITH HELP-CODE
+                await setTimeout(1000);
+                console.log(`NOT-FOUND WITH HELP-CODES:\x1b[1m${helpItem}\x1b[0m`);
+                index++;
+                continue;
+              }
+              for (let item of existProductHelpsCode) { // FOUND ITEMS > LOOP ITEMS > ADD TO CHART
+                  await setTimeout(1000);
+                  await dropdownBtn(page, item.id);
+                  const itemsVarian = await itemVarianDropdown(page)
+                  await addToChart(page, codeItem, amountItem, itemsVarian);
               }
             }
           }
