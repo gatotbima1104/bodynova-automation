@@ -4,6 +4,7 @@ import * as dotenv from "dotenv";
 import { google } from "googleapis";
 import { setTimeout } from "timers/promises";
 import fs from "fs";
+import { timeout } from "puppeteer";
 
 dotenv.config();
 puppeteer.use(StealthPlugin());
@@ -67,18 +68,18 @@ async function loginPage(page, email, password, browser, loginUrl) {
       consoleLog("LOGGING IN ....");
       await page.goto(loginUrl, {
         waitUntil: "domcontentloaded",
-        timeout: 60000, // reduce waiting login
+        timeout: 180000, // reduce waiting login
       });
 
       await setTimeout(1000);
 
-      await page.waitForSelector('input[type="email"]', { visible: true });
+      await page.waitForSelector('input[type="email"]', {visible: true, timeout: 180000});
       await page.type('input[type="email"]', email, { delay: 200 });
 
-      await page.waitForSelector('input[type="password"]', { visible: true });
+      await page.waitForSelector('input[type="password"]', {visible: true, timeout: 180000});
       await page.type('input[type="password"]', password, { delay: 200 });
 
-      await page.waitForSelector('button[type="submit"]', { visible: true });
+      await page.waitForSelector('button[type="submit"]', {visible: true, timeout: 180000});
       await page.click('button[type="submit"]');
 
       await setTimeout(2000); /// Reduce for better experience
@@ -214,7 +215,7 @@ async function inputToChart(page, amountItem, input, spanText){
   await input.type(amountItem, { delay: 200 }); 
 
   const chartSelector = "button.btn.btn-default.btn-prima.btn-basket.ladda-button.btn-outline-success.pull-right";
-  await page.waitForSelector(chartSelector);
+  await page.waitForSelector(chartSelector, {visible: true, timeout: 180000});
   await page.click(chartSelector);
 
   console.log(`ADDED TO CHART CODE:\x1b[1m${spanText}\x1b[0m, AMOUNT \x1b[1m${amountItem}\x1b[0m`);
@@ -307,8 +308,9 @@ async function product(page) {
 // DropdownBtn
 async function dropdownBtn(page, productId) {
   const dropdownSelector = `#${productId} > td.ebenetitel > form > div > div.col-sm-5 > div > button`;
+  // #articleA_12b3dbf56ba4c09753e935ad5f5faeab > td.ebenetitel > form > div > div.col-sm-5 > div
   try {
-      await page.waitForSelector(dropdownSelector, { visible: true });
+      await page.waitForSelector(dropdownSelector, {visible: true, timeout: 180000});
       await page.click(dropdownSelector);
       await setTimeout(3500); // Adjust timing as necessary
   } catch (error) {
@@ -319,7 +321,7 @@ async function dropdownBtn(page, productId) {
 // ItemVarian inside dropdownBtn
 async function itemVarianDropdown(page){
   const itemsVarianSelector = "td.ebenetitel.d-none.d-xl-table-cell";
-  await page.waitForSelector(itemsVarianSelector);
+  await page.waitForSelector(itemsVarianSelector, {visible: true, timeout: 180000});
   const itemsVarian = await page.$$(itemsVarianSelector);
 
   return itemsVarian
@@ -345,8 +347,9 @@ async function itemVarianDropdown(page){
     // Setting page for browser
     const browser = await puppeteer.launch({
       headless: "new",
-      args: ["--no-sandbox", "--enable-blink-features=HTMLImports"],
+      args: ["--no-sandbox"],
     });
+
     const page = await browser.newPage();
 
     // Login process bodynova
