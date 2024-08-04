@@ -4,7 +4,6 @@ import * as dotenv from "dotenv";
 import { google } from "googleapis";
 import { setTimeout } from "timers/promises";
 import fs from "fs";
-import { timeout } from "puppeteer";
 
 dotenv.config();
 puppeteer.use(StealthPlugin());
@@ -222,6 +221,27 @@ async function inputToChart(page, amountItem, input, spanText){
   await setTimeout(3000); 
 }
 
+// Input chart without dropdown
+async function inputToChartWithoutDropdown(page, amountItem, inputSelector, spanText){
+  const input = await page.$(inputSelector);
+  if (!input) {
+    console.log('Input element not found');
+    return;
+  }
+
+  await input.click({ clickCount: 3 }); 
+  await input.press("Backspace"); 
+  await setTimeout(500);
+  await input.type(amountItem, { delay: 200 }); 
+
+  const chartSelector = 'div.input-line.pull-right button';
+  await page.waitForSelector(chartSelector, { visible: true, timeout: 180000 });
+  await page.click(chartSelector);
+
+  console.log(`ADDED TO CHART CODE: \x1b[1m${spanText}\x1b[0m, AMOUNT \x1b[1m${amountItem}\x1b[0m`);
+  await setTimeout(3000); 
+}
+
 // Function addToChart
 async function addToChart(page, codeItem, amountItem, itemsVarian) {
   try {
@@ -412,47 +432,78 @@ async function itemVarianDropdown(page){
           } else {                       
             // FOUND ITEMS 
             let foundProductPattern = false;
-            for (let product of foundProducts) {
-              if (product.code.includes(codePattern)) {
-                console.log(`FOUND CODE:\x1b[1m${codeItem}\x1b[0m, WITHOUT HELP-CODES` );
+            const inputSelector = 'input[type="numeric"]';
+
+            // Check if the input element is present and process it
+            const inputElement = await page.$(inputSelector);
+            if (inputElement) {
+              console.log(`FOUND INPUT ELEMENT FOR CODE:\x1b[1m${codeItem}\x1b[0m, WITHOUT HELP-CODES`);
+              await setTimeout(1000);
+            
+              try {
+                await inputToChartWithoutDropdown(page, amountItem, inputSelector, codeItem);
+                foundProductPattern = true;
+              } catch (error) {
+                console.error(`Error processing input without dropdown - CODE: ${codeItem}`, error);
+              }
+            } else {
+              for (let product of foundProducts) {
+                if (product.code.includes(codePattern)) {
+                  console.log(`FOUND CODE:\x1b[1m${codeItem}\x1b[0m, WITHOUT HELP-CODES` );
+                  await setTimeout(1000);
+                  try {
+                    // Click the dropdown menu;
+                    await dropdownBtn(page, product.id)
+  
+                    const itemsVarian = await itemVarianDropdown(page)
+  
+                    // await addToChart(page, codeItem, amountItem, itemsVarian);
+                    await addToChartNotFoundToHelpCode(page, codeItem, amountItem, itemsVarian, helpItem, codePattern)
+                    foundProductPattern = true;
+                    break;
+                  } catch (error) {
+                    console.error(
+                      `Error processing product - ID: ${product.id}`,
+                      error
+                    );
+                  }
+                }else{
+  
+                  // No dwopdown
+                  let foundMatch = false;
+                  const inputSelector = 'input[type="numeric"]';
+                  if (inputSelector) {
+                    await inputToChartWithoutDropdown(page, amountItem, inputSelector, codeItem);
+                    foundMatch = true; 
+                    break; 
+                  } else {
+                    console.log(`ITEM SOLD OUT ....`);
+                    break;
+                  }
+                  
+                }
+              }
+              if(!foundProductPattern){
+                console.log( `NOT-FOUND CODE:\x1b[1m${codeItem}\x1b[0m, TRYING SEARCH WITH HELP-CODES ...` );
+                await page.goto( `https://sales.bodynova.com/index.php?stoken=DAAF82D7&lang=1&cl=search&searchparam=${helpItem}`, { waitUntil: "domcontentloaded" });
                 await setTimeout(1000);
-                try {
-                  // Click the dropdown menu;
-                  await dropdownBtn(page, product.id)
-
-                  const itemsVarian = await itemVarianDropdown(page)
-
-                  // await addToChart(page, codeItem, amountItem, itemsVarian);
-                  await addToChartNotFoundToHelpCode(page, codeItem, amountItem, itemsVarian, helpItem, codePattern)
-                  foundProductPattern = true;
-                  break;
-                } catch (error) {
-                  console.error(
-                    `Error processing product - ID: ${product.id}`,
-                    error
-                  );
+    
+                const existProductHelpsCode = await product(page);
+                if (existProductHelpsCode === 0) {      // NOT FOUND ITEMS WITH HELP-CODE
+                  await setTimeout(1000);
+                  console.log(`NOT-FOUND WITH HELP-CODES:\x1b[1m${helpItem}\x1b[0m`);
+                  index++;
+                  continue;
+                }
+                for (let item of existProductHelpsCode) { // FOUND ITEMS > LOOP ITEMS > ADD TO CHART
+                    await setTimeout(1000);
+                    await dropdownBtn(page, item.id);
+                    const itemsVarian = await itemVarianDropdown(page)
+                    await addToChart(page, codeItem, amountItem, itemsVarian);
                 }
               }
             }
-            if(!foundProductPattern){
-              console.log( `NOT-FOUND CODE:\x1b[1m${codeItem}\x1b[0m, TRYING SEARCH WITH HELP-CODES ...` );
-              await page.goto( `https://sales.bodynova.com/index.php?stoken=DAAF82D7&lang=1&cl=search&searchparam=${helpItem}`, { waitUntil: "domcontentloaded" });
-              await setTimeout(1000);
-  
-              const existProductHelpsCode = await product(page);
-              if (existProductHelpsCode === 0) {      // NOT FOUND ITEMS WITH HELP-CODE
-                await setTimeout(1000);
-                console.log(`NOT-FOUND WITH HELP-CODES:\x1b[1m${helpItem}\x1b[0m`);
-                index++;
-                continue;
-              }
-              for (let item of existProductHelpsCode) { // FOUND ITEMS > LOOP ITEMS > ADD TO CHART
-                  await setTimeout(1000);
-                  await dropdownBtn(page, item.id);
-                  const itemsVarian = await itemVarianDropdown(page)
-                  await addToChart(page, codeItem, amountItem, itemsVarian);
-              }
-            }
+            
           }
         } catch (error) {
           console.log(error);
