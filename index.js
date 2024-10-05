@@ -61,9 +61,9 @@ function consoleLog(values) {
 // Function loginWebsite
 async function loginPage(page, email, password, browser, loginUrl) {
   try {
-    // const existCookies = fs.existsSync("./cookies.json");
-    // if (!existCookies) {
-    //   consoleLog("COOKIES NOT FOUND, LOGGING IN .....");
+    const existCookies = fs.existsSync("./cookies.json");
+    if (!existCookies) {
+      consoleLog("COOKIES NOT FOUND, LOGGING IN .....");
       consoleLog("LOGGING IN ....");
       await page.goto(loginUrl, {
         waitUntil: "domcontentloaded",
@@ -104,14 +104,14 @@ async function loginPage(page, email, password, browser, loginUrl) {
       } catch (error) {
         console.error("An error occurred:", error);
       }
-    // } else {
-    //   const cookieString = fs.readFileSync("./cookies.json");
-    //   const cookies = await JSON.parse(cookieString);
-    //   await page.setCookie(...cookies);
-    //   consoleLog("COOKIES FOUND AND SETTED SUCCESSFULLY");
+    } else {
+      const cookieString = fs.readFileSync("./cookies.json");
+      const cookies = await JSON.parse(cookieString);
+      await page.setCookie(...cookies);
+      consoleLog("COOKIES FOUND AND SETTED SUCCESSFULLY");
 
-    //   return true;
-    // }
+      return true;
+    }
   } catch (error) {
     console.log(`login failed : `, error);
   }
@@ -390,8 +390,22 @@ async function itemVarianDropdown(page){
         const amountItem = amounts[item];
         const helpItem = helps[item];
 
-        const codeItemHelp = codeItem.match(/\d+/)[0];
-        const codePattern = `${codeItemHelp}x`;
+        // Handle code that not contain numbers
+        let codeItemHelp;
+        let codePattern;
+
+        const numberMatch = codeItem.match(/\d+/);
+
+        if(numberMatch){
+          codeItemHelp = numberMatch[0];
+          codePattern = `${codeItemHelp}x`;
+        }else{
+          codeItemHelp = codeItem 
+          codePattern = codeItem
+        }
+        
+        // const codeItemHelp = codeItem.match(/\d+/)[0];
+        // const codePattern = `${codeItemHelp}x`;
 
         console.log(
           `================================= PROCESSING ITEMS \x1b[1m${index}\x1b[0m`
